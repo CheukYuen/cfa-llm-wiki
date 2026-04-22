@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+.python-version
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+.obsidian/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Project data (source of truth stays local; staging is regeneratable)
+raw/cfa/*.pdf
+staging/markdown/cfa/*.md
