@@ -22,6 +22,3 @@ Thumbs.db
 .env.*
 !.env.example
 
-# Project data (source of truth stays local; staging is regeneratable)
-raw/cfa/*.pdf
-staging/markdown/cfa/*.md
