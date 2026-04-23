@@ -56,11 +56,16 @@ Each tool is independently runnable via `python tools/<name>.py --help`.
   frontmatter. Only tool allowed to write into `wiki/` during normal use.
 - `tools/extract_concepts.py` — LLM proposes new concept slugs. All
   provider-specific code lives in one function: `call_llm(text, max_new)`.
-  Swapping providers (Anthropic, DeepSeek, internal gateway) means editing
-  that function only. Supports `--dry-run`. Uses `OPENAI_API_KEY`,
-  `OPENAI_BASE_URL` (optional), `OPENAI_MODEL` (optional, default
-  `gpt-4o-mini`). Never writes wiki pages — only appends slugs to
-  `data/concept_seed_list.yaml`.
+  Swapping providers (Anthropic, DeepSeek, OpenAI, internal gateway) means
+  editing that function only. Supports `--dry-run`. Current provider is
+  Alibaba Cloud DashScope (Bailian) in OpenAI-compatible mode, reusing the
+  pinned `openai` SDK. Reads `DASHSCOPE_API_KEY` (required),
+  `DASHSCOPE_BASE_URL` (optional, default
+  `https://dashscope.aliyuncs.com/compatible-mode/v1`), and
+  `DASHSCOPE_MODEL` (optional, default `qwen3.6-max-preview`). A project-
+  root `.env` file is auto-loaded via `python-dotenv` (`override=False`,
+  so real environment variables still win). Never writes wiki pages —
+  only appends slugs to `data/concept_seed_list.yaml`.
 - `tools/search_wiki.py` — substring search over `wiki/` only. Modes:
   `any|name|title|body`. Excludes `index.md` and `log.md`.
 
@@ -86,8 +91,8 @@ pip install -r requirements.txt
 python tools/ingest_markitdown.py           # PDFs -> staging
 python tools/build_wiki.py --mode init      # seeds -> wiki skeleton
 
-# LLM-assisted concept expansion
-export OPENAI_API_KEY=sk-...
+# LLM-assisted concept expansion (DashScope / Bailian, qwen3.6-max-preview)
+# Put DASHSCOPE_API_KEY in .env (auto-loaded), or export it in the shell.
 python tools/extract_concepts.py --dry-run  # preview candidates
 python tools/extract_concepts.py            # commit to seed YAML
 python tools/build_wiki.py --mode init      # create pages for new slugs
@@ -108,10 +113,18 @@ There are no unit tests, no linter configuration, and no build step. The
 - ❌ Do not hand-edit past lines of `wiki/log.md`. Append-only via tooling.
 - ❌ Do not add new top-level subdirectories under `wiki/` without also
   updating `tools/build_wiki.py` (indexing) and `schema/AGENTS.md` (rules).
-- ❌ Do not introduce Jinja, Flask, FastAPI, SQLAlchemy, or any
-  vector/embedding dependency. The four pinned deps
-  (`markitdown[pdf]`, `PyYAML`, `python-frontmatter`, `openai`) are the
-  whole dependency surface.
+- ❌ Do not introduce a web framework (Flask, FastAPI, Django, ...), an
+  ORM / database driver (SQLAlchemy, psycopg, ...), a templating engine
+  (Jinja, Mako, ...), or any vector / embedding / RAG dependency. These
+  are banned on architectural grounds — they contradict the project's
+  "local plain-text knowledge base, not a PDF-RAG" identity, not because
+  of any dependency-count budget.
+- ℹ️ Dependencies are kept minimal by default but **not frozen**. Adding
+  a small, well-scoped library (e.g. `python-dotenv`, `httpx`, `rich`) is
+  allowed when it replaces hand-rolled code or materially improves a
+  tool. When you add one: pin it in `requirements.txt` with a sensible
+  floor, mention it in the relevant tool's docstring, and — if it
+  affects the LLM path — note it in this file's "Tool surface" section.
 - ✅ Obsidian usage: open the **project root** as the vault (not just
   `wiki/`), so staging and schema are available for cross-reference.
 

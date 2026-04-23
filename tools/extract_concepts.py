@@ -22,6 +22,7 @@ from pathlib import Path
 from utils import (
     CONCEPT_SEEDS,
     LOG_PATH,
+    PROJECT_ROOT,
     STAGING_DIR,
     dump_yaml,
     load_yaml,
@@ -33,6 +34,11 @@ from utils import (
 # ---------------------------------------------------------------------------
 # LLM boundary — keep every provider-specific detail inside this function.
 # ---------------------------------------------------------------------------
+
+# Provider: Alibaba Cloud DashScope (Bailian), OpenAI-compatible mode.
+# Docs: https://help.aliyun.com/zh/model-studio/developer-reference/compatibility-of-openai-with-dashscope
+DASHSCOPE_DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+DASHSCOPE_DEFAULT_MODEL = "qwen3.6-max-preview"
 
 SYSTEM_PROMPT = (
     "You extract candidate financial concept slugs from CFA Level I study "
@@ -48,21 +54,29 @@ SYSTEM_PROMPT = (
 
 def call_llm(text: str, max_new: int) -> list[str]:
     """Return a list of candidate concept slugs."""
-    api_key = os.environ.get("OPENAI_API_KEY")
+    # Load project-root .env. override=False means real environment
+    # variables (e.g. set in the shell or CI) win over the file — matches
+    # standard 12-factor precedence.
+    from dotenv import load_dotenv  # noqa: WPS433 (lazy import so --help works without deps)
+
+    load_dotenv(dotenv_path=PROJECT_ROOT / ".env", override=False)
+
+    api_key = os.environ.get("DASHSCOPE_API_KEY")
     if not api_key:
         print(
-            "[err] OPENAI_API_KEY is not set. "
-            "Export it (and optionally OPENAI_BASE_URL / OPENAI_MODEL) and retry.",
+            "[err] DASHSCOPE_API_KEY is not set. "
+            "Add it to .env (or export it) and retry. "
+            "Optional overrides: DASHSCOPE_BASE_URL, DASHSCOPE_MODEL.",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    base_url = os.environ.get("OPENAI_BASE_URL") or None
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    base_url = os.environ.get("DASHSCOPE_BASE_URL") or DASHSCOPE_DEFAULT_BASE_URL
+    model = os.environ.get("DASHSCOPE_MODEL", DASHSCOPE_DEFAULT_MODEL)
 
     from openai import OpenAI  # noqa: WPS433 (lazy import so --help works without deps)
 
-    client = OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, base_url=base_url)
 
     user_prompt = (
         f"Propose at most {max_new} new concept slugs drawn from the text "
@@ -184,7 +198,8 @@ def main() -> int:
         return 0
 
     print(f"[info] sending {len(text)} chars of staging to LLM "
-          f"(max_new={args.max_new}, model={os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')})")
+          f"(max_new={args.max_new}, "
+          f"model={os.environ.get('DASHSCOPE_MODEL', DASHSCOPE_DEFAULT_MODEL)})")
 
     candidates = call_llm(text, args.max_new)
     if candidates:
