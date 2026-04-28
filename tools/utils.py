@@ -29,6 +29,10 @@ TOPICS_DIR: Path = WIKI_DIR / "topics"
 CONCEPTS_DIR: Path = WIKI_DIR / "concepts"
 QA_DIR: Path = WIKI_DIR / "qa"
 
+WIKI_DRAFTS_DIR: Path = PROJECT_ROOT / "wiki_drafts"
+DRAFTS_TOPICS_DIR: Path = WIKI_DRAFTS_DIR / "topics"
+DRAFTS_CONCEPTS_DIR: Path = WIKI_DRAFTS_DIR / "concepts"
+
 INDEX_PATH: Path = WIKI_DIR / "index.md"
 LOG_PATH: Path = WIKI_DIR / "log.md"
 
@@ -151,6 +155,9 @@ __all__ = [
     "TOPICS_DIR",
     "CONCEPTS_DIR",
     "QA_DIR",
+    "WIKI_DRAFTS_DIR",
+    "DRAFTS_TOPICS_DIR",
+    "DRAFTS_CONCEPTS_DIR",
     "INDEX_PATH",
     "LOG_PATH",
     "SCHEMA_DIR",

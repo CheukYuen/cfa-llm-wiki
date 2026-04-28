@@ -13,17 +13,31 @@ If a task tempts you toward any of those rejected directions, push back
 before implementing. Read `schema/AGENTS.md` for the full ruleset — it is the
 canonical spec for what belongs in this repo and what does not.
 
-## Three-layer architecture
+## Architecture
 
-| Layer       | Role                                | Mutability                              |
-|-------------|-------------------------------------|-----------------------------------------|
-| `raw/cfa/`  | Original CFA PDFs (source of truth) | Read-only. Never write or modify.       |
-| `staging/markdown/cfa/` | MarkItDown output from `raw/` | Regeneratable cache. Safe to wipe.      |
-| `wiki/`     | Synthesised notes (topics, concepts, qa) | The **only** layer humans edit.   |
+| Layer                    | Role                                            | Mutability                          |
+|--------------------------|-------------------------------------------------|-------------------------------------|
+| `raw/cfa/`               | Original CFA PDFs (source of truth)             | Read-only. Never write or modify.   |
+| `staging/markdown/cfa/`  | MarkItDown output from `raw/`                   | Regeneratable cache. Safe to wipe.  |
+| `wiki_drafts/`           | LLM-generated draft pages awaiting human review | Disposable review buffer.           |
+| `wiki/`                  | Reviewed synthesised notes                      | The **only** final knowledge layer. |
 
-Data flows one way: `raw/` → `staging/` (via `ingest_markitdown.py`) →
-(author's brain) → `wiki/`. Tooling creates skeleton pages in `wiki/` but
-MUST NOT overwrite existing page bodies.
+Data flow: `raw/` → `staging/` (via `ingest_markitdown.py`) → LLM-assisted
+draft (via `ingest_wiki.py`) → `wiki_drafts/` → human review (via
+`review_wiki.py`) → `wiki/`. Tooling MUST NOT overwrite existing page
+bodies in `wiki/`. Only `review_wiki.py` may promote a draft into `wiki/`,
+and never over a `locked` page.
+
+`wiki_drafts/` is a buffer, not a knowledge layer. It is disposable.
+
+## Optional search surface: qmd
+
+`qmd` is an optional local markdown search CLI used as a search surface
+over `staging/` and `wiki/`. It is **not** a new knowledge layer, does
+not write content, and does not replace the wiki — search results are
+only candidates for LLM-assisted synthesis. qmd is **not** pinned in
+`requirements.txt`; the repo must work without it via the `grep`
+fallback in `ingest_wiki.py` and via `search_wiki.py`. See `docs/qmd.md`.
 
 ## Frontmatter schema (enforced)
 
@@ -68,17 +82,45 @@ Each tool is independently runnable via `python tools/<name>.py --help`.
   only appends slugs to `data/concept_seed_list.yaml`.
 - `tools/search_wiki.py` — substring search over `wiki/` only. Modes:
   `any|name|title|body`. Excludes `index.md` and `log.md`.
+- `tools/ingest_wiki.py` — LLM-assisted draft synthesis for concept and
+  topic pages. Gathers staging context (`--context-mode grep` default,
+  `--context-mode qmd` optional), calls the LLM, and writes the rendered
+  page into `wiki_drafts/`. Never writes into `wiki/`. Output pages have
+  `status: draft` and a `sources` frontmatter list whose `path` values
+  are constrained to the candidate context paths actually supplied.
+  Provider details live in `call_llm_concept` / `call_llm_topic` (same
+  DashScope/OpenAI-compatible setup as `extract_concepts.py`).
+- `tools/review_wiki.py` — human-in-the-loop promotion. `--show` prints
+  draft frontmatter, sources, body excerpt, and a diff against the
+  current `wiki/` page (if any). `--promote` writes the draft into
+  `wiki/`, flips `status` to `reviewed`, sets `updated` to today, and
+  appends a line to `wiki/log.md`. Refuses to promote drafts that have
+  no sources. Refuses to overwrite `locked` pages outright. Refuses to
+  overwrite `reviewed` pages without `--force`.
+- `tools/lint_wiki.py` — health check: stub pages, missing sources
+  (`reviewed` without sources is an error; `draft` is a warning),
+  broken `[[wikilinks]]`, pages absent from `wiki/index.md`, pending
+  drafts in `wiki_drafts/`, and drafts targeting `locked` pages. Use
+  `--include-drafts` to lint the draft layer too. `--strict` makes
+  warnings exit non-zero.
+
+`tools/qa_generate.py` is intentionally **not** part of P0. Q&A
+generation is deferred. The `qa` `type` value and `wiki/qa/` directory
+are kept in the schema for forward compatibility, but no tool generates
+them and `lint_wiki.py` does not require pages there.
 
 ## The LLM boundary
 
-There is **one** place in this codebase that calls an LLM:
-`tools/extract_concepts.py::call_llm()`. That function is the provider
-boundary — do not scatter LLM calls elsewhere. If you add another LLM use
-case, add another boundary function, keep the pattern, do not inline.
+LLM calls are confined to two boundary modules:
 
-The LLM contract is strict: JSON-only output, `{"concepts": [...]}`,
-`response_format={"type": "json_object"}`, `temperature=0`. Any drift means
-output is rejected.
+- `tools/extract_concepts.py::call_llm()` — proposes concept slugs.
+- `tools/ingest_wiki.py::call_llm_concept()` / `call_llm_topic()` —
+  drafts a concept or topic page as strict JSON.
+
+Do not scatter LLM calls elsewhere. New LLM use cases get new boundary
+functions; do not inline. All boundary functions enforce
+`response_format={"type": "json_object"}`, `temperature=0`, and reject
+any output that does not match the declared JSON shape.
 
 ## Common commands
 
@@ -100,6 +142,20 @@ python tools/build_wiki.py --mode init      # create pages for new slugs
 # Search
 python tools/search_wiki.py duration
 python tools/search_wiki.py "yield curve" --in body
+
+# LLM-assisted draft synthesis (writes wiki_drafts/, never wiki/)
+python tools/ingest_wiki.py --slug duration --type concept --dry-run
+python tools/ingest_wiki.py --slug duration --type concept
+python tools/ingest_wiki.py --all-stubs --type concept
+python tools/ingest_wiki.py --slug duration --type concept --context-mode qmd
+
+# Human-in-the-loop review
+python tools/review_wiki.py --slug duration --type concept --show
+python tools/review_wiki.py --slug duration --type concept --promote
+python tools/review_wiki.py --all --promote
+
+# Health check
+python tools/lint_wiki.py --include-drafts
 ```
 
 There are no unit tests, no linter configuration, and no build step. The
@@ -125,8 +181,17 @@ There are no unit tests, no linter configuration, and no build step. The
   tool. When you add one: pin it in `requirements.txt` with a sensible
   floor, mention it in the relevant tool's docstring, and — if it
   affects the LLM path — note it in this file's "Tool surface" section.
+- ❌ Do not let LLM-generated content land directly in `wiki/`. It must
+  go to `wiki_drafts/` and pass `tools/review_wiki.py --promote` first.
+- ❌ Do not promote a draft that lacks `sources`. Reviewed pages must
+  carry source provenance pointing at `staging/` paths.
+- ❌ Do not overwrite `locked` pages from any tool, ever.
+- ❌ Do not treat `qmd` as PDF-RAG infrastructure. It is a local search
+  surface, optional, never a service. See `docs/qmd.md`.
+- ℹ️ Q&A generation is P1, not P0. Do not implement `qa_generate.py`.
 - ✅ Obsidian usage: open the **project root** as the vault (not just
-  `wiki/`), so staging and schema are available for cross-reference.
+  `wiki/`), so staging, drafts, and schema are available for
+  cross-reference.
 
 ## When extending
 
