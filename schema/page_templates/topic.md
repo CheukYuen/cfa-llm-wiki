@@ -22,7 +22,7 @@ _What is this topic about? Two or three sentences in your own words._
 
 ## Important concepts
 
-- [[concept_slug_1]]
+- [[slug_1]]
 
 ## Relevance
 

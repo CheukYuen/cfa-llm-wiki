@@ -32,9 +32,9 @@ sources: []
 
 ## Related concepts
 
-- [[concept_volatility]]
-- [[concept_drawdown]]
-- [[concept_risk_capacity]]
+- [[volatility]]
+- [[drawdown]]
+- [[risk_capacity]]
 
 ## Notes
 

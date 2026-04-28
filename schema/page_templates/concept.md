@@ -22,7 +22,7 @@ _Half a paragraph. Problem solved by this concept._
 
 ## Related concepts
 
-- [[concept_slug_1]]
+- [[slug_1]]
 
 ## Notes
 

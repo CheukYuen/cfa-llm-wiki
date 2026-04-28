@@ -2,7 +2,7 @@
 id: concept_volatility
 type: concept
 cfa_topic: ""
-status: draft
+status: reviewed
 title: Volatility
 created: 2026-04-26
 updated: 2026-04-26
@@ -35,9 +35,9 @@ sources: []
 
 ## Related concepts
 
-- [[concept_risk_tolerance]]
-- [[concept_drawdown]]
-- [[concept_sharpe_ratio]]
+- [[risk_tolerance]]
+- [[drawdown]]
+- [[sharpe_ratio]]
 
 ## Notes
 

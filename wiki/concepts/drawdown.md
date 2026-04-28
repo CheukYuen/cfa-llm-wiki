@@ -34,9 +34,9 @@ sources: []
 
 ## Related concepts
 
-- [[concept_volatility]]
-- [[concept_risk_tolerance]]
-- [[concept_max_drawdown]]
+- [[volatility]]
+- [[risk_tolerance]]
+- [[max_drawdown]]
 
 ## Notes
 
