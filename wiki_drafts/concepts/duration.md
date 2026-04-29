@@ -23,7 +23,7 @@ sources:
   path: staging/markdown/cfa/2024 CFA© Program Curriculum Level I Volume 3 Financial
     Statement Analysis, Equity Investments (CFA Institute) (Z-Library).md
   query: ''
-status: reviewed
+status: draft
 title: Duration
 type: concept
 updated: '2026-04-28'

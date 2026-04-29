@@ -126,22 +126,34 @@ def _llm_json(system_prompt: str, user_prompt: str) -> dict:
     return json.loads(content)
 
 
-def call_llm_concept(slug: str, title: str, context_blocks: list["ContextBlock"]) -> dict:
+def call_llm_concept(
+    slug: str,
+    title: str,
+    context_blocks: list["ContextBlock"],
+    existing_body: str | None = None,
+) -> dict:
     user = _build_user_prompt(
         kind="concept",
         slug=slug,
         title=title,
         context_blocks=context_blocks,
+        existing_body=existing_body,
     )
     return _llm_json(CONCEPT_SYSTEM_PROMPT, user)
 
 
-def call_llm_topic(slug: str, title: str, context_blocks: list["ContextBlock"]) -> dict:
+def call_llm_topic(
+    slug: str,
+    title: str,
+    context_blocks: list["ContextBlock"],
+    existing_body: str | None = None,
+) -> dict:
     user = _build_user_prompt(
         kind="topic",
         slug=slug,
         title=title,
         context_blocks=context_blocks,
+        existing_body=existing_body,
     )
     return _llm_json(TOPIC_SYSTEM_PROMPT, user)
 
@@ -152,6 +164,7 @@ def _build_user_prompt(
     slug: str,
     title: str,
     context_blocks: list["ContextBlock"],
+    existing_body: str | None = None,
 ) -> str:
     parts = [
         f"Draft a {kind} page for slug `{slug}` (title: {title}).",
@@ -161,6 +174,20 @@ def _build_user_prompt(
         "field in your JSON MUST cite paths from this list verbatim.",
         "",
     ]
+    if existing_body and existing_body.strip():
+        parts.extend([
+            "POLISH MODE — an existing author-written page already covers this",
+            "concept. Preserve the author's voice, language (e.g. Chinese stays",
+            "Chinese), and structural choices. Refine wording, fill obvious",
+            "gaps, and add sources from the candidate blocks below. Do NOT",
+            "translate, do NOT rewrite from scratch, do NOT remove content the",
+            "author kept on purpose.",
+            "",
+            "--- BEGIN EXISTING_AUTHOR_NOTES ---",
+            existing_body.strip(),
+            "--- END EXISTING_AUTHOR_NOTES ---",
+            "",
+        ])
     if not context_blocks:
         parts.append("(no candidate context found; produce a careful, conservative draft)")
     for cb in context_blocks:
@@ -617,6 +644,15 @@ def parse_args() -> argparse.Namespace:
         help="Overwrite an existing draft page if present.",
     )
     parser.add_argument(
+        "--polish",
+        action="store_true",
+        help=(
+            "Read the existing wiki/<type>/<slug>.md and feed its body to the "
+            "LLM as 'preserve voice, refine wording, add sources'. Output "
+            "still goes to wiki_drafts/ for human review."
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Do not write any draft file; print what would happen.",
@@ -649,12 +685,25 @@ def _process(job: PageJob, args: argparse.Namespace) -> str:
         return f"[dry-run] {job.type}/{job.slug}: {len(blocks)} block(s) — {paths}"
 
     candidate_paths = {b.path for b in blocks}
+    existing_body: str | None = None
+    if args.polish:
+        wiki_target = (CONCEPTS_DIR if job.type == "concept" else TOPICS_DIR) / f"{job.slug}.md"
+        if wiki_target.exists():
+            try:
+                existing_body = read_markdown(wiki_target).content or ""
+            except Exception as exc:  # noqa: BLE001
+                print(f"[warn] {job.type}/{job.slug}: cannot read existing page for polish: {exc}",
+                      file=sys.stderr)
+        else:
+            print(f"[warn] {job.type}/{job.slug}: --polish set but no existing wiki page",
+                  file=sys.stderr)
+
     try:
         if job.type == "concept":
-            payload = call_llm_concept(job.slug, job.title, blocks)
+            payload = call_llm_concept(job.slug, job.title, blocks, existing_body)
             rendered = _render_concept_md(job.slug, payload, candidate_paths)
         else:
-            payload = call_llm_topic(job.slug, job.title, blocks)
+            payload = call_llm_topic(job.slug, job.title, blocks, existing_body)
             rendered = _render_topic_md(job.slug, payload, candidate_paths)
     except Exception as exc:  # noqa: BLE001
         return f"[err] {job.type}/{job.slug}: LLM failed: {exc}"
