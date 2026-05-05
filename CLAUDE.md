@@ -89,7 +89,15 @@ Each tool is independently runnable via `python tools/<name>.py --help`.
   `status: draft` and a `sources` frontmatter list whose `path` values
   are constrained to the candidate context paths actually supplied.
   Provider details live in `call_llm_concept` / `call_llm_topic` (same
-  DashScope/OpenAI-compatible setup as `extract_concepts.py`).
+  DashScope/OpenAI-compatible setup as `extract_concepts.py`). Supports
+  `--polish`: when set, reads the existing `wiki/<type>/<slug>.md` body
+  and feeds it to the LLM as `EXISTING_AUTHOR_NOTES` with instructions
+  to preserve the author's language (e.g. Chinese stays Chinese), voice
+  and structure — only refine wording, fill obvious gaps, and attach
+  `sources` from candidate staging blocks. Output still goes to
+  `wiki_drafts/`; promotion is still gated by `review_wiki.py`. Use
+  this to retrofit `sources` onto an already-`reviewed` page without
+  rewriting it from scratch.
 - `tools/review_wiki.py` — human-in-the-loop promotion. `--show` prints
   draft frontmatter, sources, body excerpt, and a diff against the
   current `wiki/` page (if any). `--promote` writes the draft into
@@ -149,9 +157,14 @@ python tools/ingest_wiki.py --slug duration --type concept
 python tools/ingest_wiki.py --all-stubs --type concept
 python tools/ingest_wiki.py --slug duration --type concept --context-mode qmd
 
+# Polish an existing wiki page (preserves voice/language; adds sources)
+python tools/ingest_wiki.py --slug volatility --type concept --polish --force-draft
+
 # Human-in-the-loop review
 python tools/review_wiki.py --slug duration --type concept --show
 python tools/review_wiki.py --slug duration --type concept --promote
+# Overwriting an existing reviewed page requires --force (locked is never overwritten)
+python tools/review_wiki.py --slug volatility --type concept --promote --force
 python tools/review_wiki.py --all --promote
 
 # Health check

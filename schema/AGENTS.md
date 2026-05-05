@@ -89,6 +89,14 @@ Warnings do not block the run. Fix them when you see them.
 - **Draft flow.** LLM-generated pages start in `wiki_drafts/` with status `draft`.
 - **Review required.** Only after human validation should a page be promoted to `wiki/` and marked `reviewed`.
 - **Lock important pages.** Use `locked` to prevent further automated changes.
+- **Polish over rewrite.** When an existing `wiki/` page is human-authored
+  but missing `sources` (or needs light refinement), use
+  `tools/ingest_wiki.py --polish`. The LLM receives the existing body as
+  `EXISTING_AUTHOR_NOTES` and is instructed to preserve language, voice,
+  and structure — only fill gaps and attach `sources` from staging
+  candidates. The polished output still lands in `wiki_drafts/` and must
+  be reviewed and promoted explicitly. Never use `--polish` to translate
+  or restructure a page wholesale; for that, write a new draft by hand.
 
 ## Ingest rules (`tools/ingest_markitdown.py`)
 
